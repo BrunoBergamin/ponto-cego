@@ -207,3 +207,19 @@ h1{font-family:var(--display);font-weight:700;font-size:clamp(34px,6.4vw,66px);l
   .hero-trust{gap:24px}
   .scroll-hint{display:none}
 }
+
+/* ===== BLOCO RAIO-X DO SITE (resultado) ===== */
+.r-site{border-color:rgba(124,92,255,.35)}
+.site-line{display:flex;align-items:flex-start;gap:10px;font-size:14px;color:#d6deea;padding:5px 0}
+.site-line+.site-line{border-top:1px dashed var(--line)}
+.site-ic{flex:none;font-weight:700;width:18px;text-align:center}
+
+/* ===== BOTÃO COMPARTILHAR (resultado) ===== */
+.r-share{background:rgba(255,255,255,.04) !important;color:var(--text) !important;border:1px solid var(--line) !important;box-shadow:none !important;margin-top:10px}
+.r-share:hover{border-color:var(--accent) !important}
+
+/* ===== ACESSIBILIDADE: reduz movimento ===== */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;scroll-behavior:auto !important}
+  .scroll-hint{display:none}
+}

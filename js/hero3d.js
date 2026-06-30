@@ -14,9 +14,11 @@
   }
 
   var reduzir = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // device fraco: celular / poucos núcleos -> versão mais leve
+  var fraco = (matchMedia("(pointer: coarse)").matches) || (navigator.hardwareConcurrency || 8) <= 4;
 
-  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: !fraco, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, fraco ? 1.5 : 2));
 
   var scene = new THREE.Scene();
   var camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
@@ -29,7 +31,7 @@
   // ---- esfera de pontos (o "negócio") ----
   var R = 2.45;
   var geoPts = new THREE.BufferGeometry();
-  var N = 1500;
+  var N = fraco ? 800 : 1500;
   var pos = new Float32Array(N * 3);
   var dir = []; // guarda a direção de cada ponto para colorir o setor escuro
   for (var i = 0; i < N; i++) {
@@ -87,7 +89,7 @@
 
   // ---- partículas de fundo (poeira) ----
   var dustGeo = new THREE.BufferGeometry();
-  var ND = 380;
+  var ND = fraco ? 160 : 380;
   var dpos = new Float32Array(ND * 3);
   for (var k = 0; k < ND; k++) {
     dpos[k * 3] = (Math.random() - 0.5) * 22;
@@ -120,13 +122,20 @@
   window.addEventListener("resize", resize);
   resize();
 
-  var paused = false;
-  document.addEventListener("visibilitychange", function () { paused = document.hidden; });
+  // pausa quando a aba está oculta OU quando o hero saiu da viewport (economiza GPU/bateria)
+  var abaOculta = false, foraDaTela = false;
+  function estaPausado() { return abaOculta || foraDaTela; }
+  document.addEventListener("visibilitychange", function () { abaOculta = document.hidden; });
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver(function (ents) {
+      foraDaTela = !ents[0].isIntersecting;
+    }, { threshold: 0.01 }).observe(canvas);
+  }
 
   var t0 = 0;
   function loop(t) {
     requestAnimationFrame(loop);
-    if (paused) return;
+    if (estaPausado()) { t0 = t; return; }
     var dt = (t - t0) / 1000; t0 = t;
 
     // rotação base contínua

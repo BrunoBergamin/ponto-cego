@@ -106,7 +106,7 @@ const DIAGNOSTICO = {
 /* ============================================================
    ESTADO + RENDER
    ============================================================ */
-const state = { etapa:"intro", idx:0, lead:{nome:"",email:"",whats:""}, respostas:[] };
+const state = { etapa:"intro", idx:0, lead:{nome:"",email:"",whats:"",site:""}, respostas:[] };
 const card = document.getElementById("quizCard");
 
 function render(){
@@ -123,21 +123,26 @@ function renderIntro(){
       <h3 class="q-title">Pra onde envio o seu diagnóstico?</h3>
       <p class="q-desc">Preencha abaixo. Leva 30 segundos e o resultado vai aparecer aqui e no seu WhatsApp.</p>
       <div class="q-field" id="f-nome">
-        <label>Seu nome</label>
-        <input type="text" id="in-nome" placeholder="Como você se chama?" value="${state.lead.nome}" autocomplete="name" />
+        <label for="in-nome">Seu nome</label>
+        <input type="text" id="in-nome" placeholder="Como você se chama?" value="${escapeHtml(state.lead.nome)}" autocomplete="name" />
         <span class="err">Digite seu nome.</span>
       </div>
       <div class="q-field" id="f-email">
-        <label>Seu melhor e-mail</label>
-        <input type="email" id="in-email" placeholder="voce@email.com" value="${state.lead.email}" autocomplete="email" />
+        <label for="in-email">Seu melhor e-mail</label>
+        <input type="email" id="in-email" placeholder="voce@email.com" value="${escapeHtml(state.lead.email)}" autocomplete="email" />
         <span class="err">Digite um e-mail válido.</span>
       </div>
       <div class="q-field" id="f-whats">
-        <label>Seu WhatsApp (com DDD)</label>
-        <input type="tel" id="in-whats" placeholder="(15) 99999-9999" value="${state.lead.whats}" autocomplete="tel" />
+        <label for="in-whats">Seu WhatsApp (com DDD)</label>
+        <input type="tel" id="in-whats" placeholder="(15) 99999-9999" value="${escapeHtml(state.lead.whats)}" autocomplete="tel" />
         <span class="err">Digite um WhatsApp válido (DDD + número).</span>
       </div>
-      <p class="q-consent">Seus dados são usados só para te enviar o resultado. Sem spam.</p>
+      <div class="q-field" id="f-site">
+        <label for="in-site">Site do seu negócio <span style="color:var(--muted);font-weight:400">(opcional, se tiver)</span></label>
+        <input type="url" id="in-site" placeholder="www.seusite.com.br" value="${escapeHtml(state.lead.site)}" autocomplete="url" inputmode="url" />
+        <span class="err">Confira o endereço do site.</span>
+      </div>
+      <p class="q-consent">Se informar o site, incluímos uma análise rápida dele no seu resultado. Seus dados são usados só para te enviar o diagnóstico. Sem spam.</p>
       <div class="q-actions">
         <button class="q-back" disabled>voltar</button>
         <button class="q-next" id="btn-start">Revelar meu ponto cego</button>
@@ -150,14 +155,31 @@ function iniciarQuiz(){
   const nome=document.getElementById("in-nome").value.trim();
   const email=document.getElementById("in-email").value.trim();
   const whats=document.getElementById("in-whats").value.trim();
-  let ok=true;
-  setInvalid("f-nome", nome.length<2 && (ok=false));
-  setInvalid("f-email", !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && (ok=false));
-  setInvalid("f-whats", whats.replace(/\D/g,"").length<10 && (ok=false));
-  if(!ok) return;
-  state.lead={nome,email,whats};
+  const site=document.getElementById("in-site").value.trim();
+  // valida cada campo separadamente (mais legível e seguro)
+  const nomeOk=nome.length>=2;
+  const emailOk=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const digitos=whats.replace(/\D/g,"").length;
+  const whatsOk=digitos>=10 && digitos<=13;          // BR: 10 ou 11 + DDI opcional
+  const siteOk=site==="" || ehUrlValida(site);        // opcional: só valida se preenchido
+  setInvalid("f-nome", !nomeOk);
+  setInvalid("f-email", !emailOk);
+  setInvalid("f-whats", !whatsOk);
+  setInvalid("f-site", !siteOk);
+  if(!(nomeOk && emailOk && whatsOk && siteOk)) return;
+  state.lead={nome,email,whats,site:normalizarUrl(site)};
   state.etapa="pergunta"; state.idx=0;
   render();
+}
+function ehUrlValida(s){
+  // aceita "site.com.br", "www.x.com", "https://x.com"
+  return /^(https?:\/\/)?([\w-]+\.)+[a-z]{2,}(\/\S*)?$/i.test(s);
+}
+function normalizarUrl(s){
+  if(!s) return "";
+  s=s.trim();
+  if(!/^https?:\/\//i.test(s)) s="https://"+s;
+  return s;
 }
 function setInvalid(id,cond){ document.getElementById(id).classList.toggle("invalid",!!cond); }
 
@@ -246,7 +268,7 @@ function renderResultado(){
       <div class="r-head">
         <span class="r-tag">Seu diagnóstico está pronto, ${escapeHtml(firstName(state.lead.nome))}</span>
         <h3 class="r-main">Seu ponto cego é<br /><span>${d.titulo}</span></h3>
-        <p class="r-sub">Nota média do seu negócio: <b>${res.media}/10</b></p>
+        <p class="r-sub">Nota média do seu negócio: <b><span id="r-media" data-alvo="${res.media}">0</span>/10</b></p>
       </div>
       <div class="r-bars">${bars}</div>
       <div class="r-block"><h4>🎯 O que isso significa</h4><p>${d.dor}</p></div>
@@ -254,37 +276,114 @@ function renderResultado(){
       <div class="r-block r-cost"><h4>💸 Custo estimado do ponto cego</h4><p>Entre <b>R$ ${brl(res.custo.low)}</b> e <b>R$ ${brl(res.custo.high)}</b> por mês em oportunidade perdida. <span style="color:var(--muted);font-size:13px">(estimativa ilustrativa com base nas respostas)</span></p></div>
       <div class="r-block"><h4>⚡ Ação prática pra hoje</h4><p>${d.acao}</p></div>
       <div class="r-block"><h4>🧭 Próximo passo</h4><p>${d.proximo}</p></div>
+      ${blocoSite()}
       <div class="r-cta">
         <a href="${linkWhatsApp(res, d)}" target="_blank" rel="noopener" class="btn btn-primary r-wa" id="btn-wa">Receber o plano completo no WhatsApp</a>
+        <button class="btn r-share" id="btn-share">Compartilhar meu resultado</button>
         <p class="r-small">Vou te mandar o detalhamento e o caminho pra destravar o ${d.titulo.toLowerCase()}.</p>
         <button class="r-restart" id="btn-restart">refazer o diagnóstico</button>
       </div>
     </div>`;
 
-  // anima as barras
+  const reduzir = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // anima as barras e o número da nota média (count-up)
   requestAnimationFrame(()=>setTimeout(()=>{
     card.querySelectorAll(".r-bar-fill").forEach(f=>{ f.style.width=f.dataset.w+"%"; });
+    const el=document.getElementById("r-media");
+    if(el) countUp(el, parseInt(el.dataset.alvo,10), reduzir?0:900);
   },80));
 
   document.getElementById("btn-restart").onclick=()=>{
-    state.etapa="intro"; state.idx=0; state.respostas=[]; render();
+    state.etapa="intro"; state.idx=0; state.respostas=[]; _salvou=false; render();
     document.getElementById("quiz").scrollIntoView({behavior:"smooth"});
   };
+
+  // compartilhar resultado (Web Share API nativo, com fallback pro WhatsApp)
+  document.getElementById("btn-share").onclick=()=>compartilhar(res, d);
 
   // salva o lead (Google Sheets) uma vez
   salvarLead(res, d);
 }
 
+/* anima um número de 0 até o alvo */
+function countUp(el, alvo, dur){
+  if(dur<=0){ el.textContent=alvo; return; }
+  const ini=performance.now();
+  function passo(t){
+    const k=Math.min((t-ini)/dur,1);
+    const eased=1-Math.pow(1-k,3);
+    el.textContent=Math.round(alvo*eased);
+    if(k<1) requestAnimationFrame(passo);
+  }
+  requestAnimationFrame(passo);
+}
+
+/* compartilhar o resultado: usa o menu nativo do celular; cai pro WhatsApp no desktop */
+function compartilhar(res, d){
+  const texto=`Fiz o diagnóstico Ponto Cego e descobri meu maior gargalo: ${d.titulo} (nota ${res.media}/10). Faça o seu:`;
+  const url=location.href.split("?")[0];
+  if(navigator.share){
+    navigator.share({title:"Ponto Cego", text:texto, url:url}).catch(()=>{});
+  } else {
+    window.open(`https://wa.me/?text=${encodeURIComponent(texto+" "+url)}`,"_blank","noopener");
+  }
+}
+
+/* ---- Mini-análise do site (sinais reais extraídos da própria URL) ----
+   Numa página estática não dá pra LER o conteúdo de outro site (CORS).
+   Então analisamos sinais honestos e úteis a partir do endereço informado. ---- */
+function analisarSite(url){
+  let host="", path="", protocolo="";
+  try{ const u=new URL(url); host=u.hostname.replace(/^www\./,""); path=u.pathname; protocolo=u.protocol; }
+  catch(e){ return null; }
+  const gratuitos=["wixsite.com","wordpress.com","blogspot.com","webnode","jimdo","weebly","glitch.me","github.io","vercel.app","netlify.app","linktr.ee","beacons.ai","milharal","000webhost"];
+  const construtores=["wixsite.com","webnode","jimdo","weebly"];
+  const itens=[];
+  // HTTPS
+  itens.push(protocolo==="https:"
+    ? {ok:"ok", t:"Tem HTTPS (cadeado de segurança)"}
+    : {ok:"no", t:"Sem HTTPS: o navegador marca como 'não seguro'"});
+  // domínio próprio
+  const ehGratuito=gratuitos.some(g=>host.includes(g));
+  itens.push(!ehGratuito
+    ? {ok:"ok", t:"Domínio próprio (passa mais profissionalismo)"}
+    : {ok:"warn", t:"Domínio de plataforma gratuita: um domínio próprio passa mais autoridade"});
+  // construtor visual (sinal de site mais limitado em SEO)
+  if(construtores.some(g=>host.includes(g)))
+    itens.push({ok:"warn", t:"Feito em construtor visual: costuma limitar performance e SEO"});
+  // subpasta tipo /site/
+  if(/^\/(site|web|home|pagina)\/?/i.test(path))
+    itens.push({ok:"warn", t:"Site numa subpasta ("+path.replace(/\/$/,"")+"): ideal é responder na raiz do domínio"});
+  // .com.br / br
+  if(/\.br$/.test(host))
+    itens.push({ok:"ok", t:"Domínio .br (bom para buscas locais no Brasil)"});
+  // sempre: lembrete de profundidade
+  itens.push({ok:"warn", t:"Análise completa (velocidade, SEO on-page, mobile) entra no plano detalhado"});
+  return {host, itens};
+}
+function blocoSite(){
+  if(!state.lead.site) return "";
+  const a=analisarSite(state.lead.site);
+  if(!a) return "";
+  const linhas=a.itens.map(i=>{
+    const cor=i.ok==="ok"?"var(--good)":i.ok==="no"?"var(--bad)":"var(--warn)";
+    const ic=i.ok==="ok"?"✓":i.ok==="no"?"✕":"!";
+    return `<div class="site-line"><span class="site-ic" style="color:${cor}">${ic}</span><span>${escapeHtml(i.t)}</span></div>`;
+  }).join("");
+  return `<div class="r-block r-site"><h4>🔎 Raio-x do seu site <span style="color:var(--muted);font-size:12px;text-transform:none;letter-spacing:0">(${escapeHtml(a.host)})</span></h4>${linhas}</div>`;
+}
+
 /* ---- WhatsApp ---- */
 function linkWhatsApp(res, d){
   const n=CONFIG.whatsappNumero.replace(/\D/g,"");
+  const linhaSite=state.lead.site ? `\nSite: ${state.lead.site}` : "";
   const msg=
 `Oi! Fiz o diagnóstico Ponto Cego.
 
 Nome: ${state.lead.nome}
 Meu ponto cego: ${d.titulo}
 Nota média: ${res.media}/10
-Scores: ${res.scores.map(s=>s.nome+" "+s.nota).join(" · ")}
+Scores: ${res.scores.map(s=>s.nome+" "+s.nota).join(" · ")}${linhaSite}
 
 Quero o plano completo pra destravar.`;
   return `https://wa.me/${n}?text=${encodeURIComponent(msg)}`;
@@ -297,6 +396,7 @@ function salvarLead(res, d){
   if(!CONFIG.sheetsEndpoint) return; // ainda não configurado
   const payload={
     nome:state.lead.nome, email:state.lead.email, whatsapp:state.lead.whats,
+    site:state.lead.site||"",
     gargalo:d.titulo, media:res.media,
     scores:res.scores.map(s=>({pilar:s.nome,nota:s.nota})),
     custo_min:res.custo.low, custo_max:res.custo.high,
